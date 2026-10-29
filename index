@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JSON to SQL & List Viewer</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    textarea { width: 100%; height: 140px; font-family: monospace; padding: 8px; box-sizing: border-box; }
+    button { padding: 8px 16px; margin: 8px 0; cursor: pointer; background: #0066cc; color: #fff; border: none; border-radius: 4px; }
+    button:hover { background: #0052a3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    pre { background: #2d3748; color: #f7fafc; padding: 12px; border-radius: 4px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+  <h2>JSON to SQL & Data Table Generator</h2>
+  <textarea id="jsonInput" placeholder='[{"id": 1, "name": "Alice", "active": true}, {"id": 2, "name": "Bob", "active": false}]'></textarea>
+  <button onclick="processData()">Generate SQL & Table</button>
+
+  <h3>Generated SQL</h3>
+  <pre id="sqlOutput">-- SQL output will appear here</pre>
+
+  <h3>Data List View</h3>
+  <div id="tableContainer"></div>
+
+  <script>
+    function inferSqlType(val) {
+      if (typeof val === 'number') return Number.isInteger(val) ? 'INTEGER' : 'DECIMAL(10,2)';
+      if (typeof val === 'boolean') return 'BOOLEAN';
+      return 'VARCHAR(255)';
+    }
+
+    function sanitize(val) {
+      if (val === null || val === undefined) return 'NULL';
+      if (typeof val === 'number' || typeof val === 'boolean') return val;
+      return `'${String(val).replace(/'/g, "''")}'`;
+    }
+
+    function processData() {
+      let raw = document.getElementById('jsonInput').value.trim();
+      let data;
+      try {
+        data = JSON.parse(raw);
+        if (!Array.isArray(data)) data = [data]; // handle single object
+      } catch (err) {
+        alert("Invalid JSON format");
+        return;
+      }
+
+      if (data.length === 0) return;
+
+      const keys = Array.from(new Set(data.flatMap(obj => Object.keys(obj))));
+
+      // 1. Generate CREATE TABLE
+      let sql = `CREATE TABLE records (\n`;
+      sql += keys.map(k => `  "${k}" ${inferSqlType(data[0][k])}`).join(',\n');
+      sql += `\n);\n\n`;
+
+      // 2. Generate INSERT Statements
+      sql += `INSERT INTO records (${keys.map(k => `"${k}"`).join(', ')}) VALUES\n`;
+      const rowStrings = data.map(row => {
+        return `  (` + keys.map(k => sanitize(row[k])).join(', ') + `)`;
+      });
+      sql += rowStrings.join(',\n') + ';\n';
+
+      document.getElementById('sqlOutput').textContent = sql;
+
+      // 3. Render HTML Table
+      let tableHtml = '<table><thead><tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr></thead><tbody>';
+      data.forEach(row => {
+        tableHtml += '<tr>' + keys.map(k => `<td>${row[k] !== undefined ? row[k] : ''}</td>`).join('') + '</tr>';
+      });
+      tableHtml += '</tbody></table>';
+
+      document.getElementById('tableContainer').innerHTML = tableHtml;
+    }
+  </script>
+</body>
+</html>
